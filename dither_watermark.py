@@ -1,9 +1,11 @@
 from PIL import Image
 import numpy as np
+import os
 
-INPUT_PATH = input("Input file: ") or "input.png"
-OUTPUT_PATH = "output.png"
-NOISE_STRENGTH = 0.01
+INPUT_DIR = "images"
+OUTPUT_DIR = "output"
+NOISE_STRENGTH = 0.03
+VALID_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 
 def load_image(path):
     image = Image.open(path)
@@ -24,10 +26,35 @@ def apply_correlated_noise(image, strength):
         return Image.fromarray(array.astype(np.uint8), mode="RGBA")
     return Image.fromarray(array.astype(np.uint8), mode="RGB")
 
+def gather_image_paths(directory):
+    if not os.path.isdir(directory):
+        return []
+    entries = sorted(os.listdir(directory))
+    paths = []
+    for name in entries:
+        if name.lower().endswith(VALID_EXTENSIONS):
+            paths.append(os.path.join(directory, name))
+    return paths
+
+def process_image(path, output_dir):
+    try:
+        image = load_image(path)
+        result = apply_correlated_noise(image, NOISE_STRENGTH)
+        name = os.path.splitext(os.path.basename(path))[0]
+        output_path = os.path.join(output_dir, name + ".png")
+        result.save(output_path)
+        print(f"Processed: {path} -> {output_path}")
+    except Exception as error:
+        print(f"Failed: {path} ({error})")
+
 def main():
-    image = load_image(INPUT_PATH)
-    result = apply_correlated_noise(image, NOISE_STRENGTH)
-    result.save(OUTPUT_PATH)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    paths = gather_image_paths(INPUT_DIR)
+    if not paths:
+        print(f"No images found in '{INPUT_DIR}'")
+        return
+    for path in paths:
+        process_image(path, OUTPUT_DIR)
 
 if __name__ == "__main__":
     main()
