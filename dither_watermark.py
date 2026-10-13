@@ -4,7 +4,8 @@ import os
 
 INPUT_DIR = "images"
 OUTPUT_DIR = "output"
-NOISE_STRENGTH = 0.03
+NOISE_STRENGTH = 0.02
+JPEG_QUALITY = 95
 VALID_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 
 def load_image(path):
@@ -26,6 +27,13 @@ def apply_correlated_noise(image, strength):
         return Image.fromarray(array.astype(np.uint8), mode="RGBA")
     return Image.fromarray(array.astype(np.uint8), mode="RGB")
 
+def flatten_alpha(image):
+    if image.mode != "RGBA":
+        return image
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    background.paste(image, mask=image.getchannel("A"))
+    return background
+
 def gather_image_paths(directory):
     if not os.path.isdir(directory):
         return []
@@ -40,9 +48,10 @@ def process_image(path, output_dir):
     try:
         image = load_image(path)
         result = apply_correlated_noise(image, NOISE_STRENGTH)
+        result = flatten_alpha(result)
         name = os.path.splitext(os.path.basename(path))[0]
-        output_path = os.path.join(output_dir, name + ".png")
-        result.save(output_path)
+        output_path = os.path.join(output_dir, name + ".jpg")
+        result.save(output_path, format="JPEG", quality=JPEG_QUALITY)
         print(f"Processed: {path} -> {output_path}")
     except Exception as error:
         print(f"Failed: {path} ({error})")
