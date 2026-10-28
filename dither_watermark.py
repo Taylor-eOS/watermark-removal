@@ -5,6 +5,10 @@ import os
 INPUT_DIR = "images"
 OUTPUT_DIR = "output"
 NOISE_STRENGTH = 0.02
+NOISE_BLUR_SIGMA = 0.8
+TEXTURE_BLUR_SIGMA = 3.0
+TEXTURE_SCALE = 8.0
+MIN_WEIGHT = 0.15
 JPEG_QUALITY = 95
 VALID_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 
@@ -14,18 +18,37 @@ def load_image(path):
         image = image.convert("RGBA" if "A" in image.mode else "RGB")
     return image
 
+def gaussian_blur(array, sigma):
+    height, width = array.shape
+    freq_y = np.fft.fftfreq(height)[:, np.newaxis]
+    freq_x = np.fft.rfftfreq(width)[np.newaxis, :]
+    response = np.exp(-2.0 * (np.pi ** 2) * (sigma ** 2) * (freq_x ** 2 + freq_y ** 2))
+    spectrum = np.fft.rfft2(array) * response
+    return np.fft.irfft2(spectrum, s=array.shape).astype(np.float32)
+
+def build_noise(shape):
+    noise = np.random.normal(0.0, 1.0, size=shape).astype(np.float32)
+    if NOISE_BLUR_SIGMA > 0:
+        noise = gaussian_blur(noise, NOISE_BLUR_SIGMA)
+    deviation = noise.std()
+    if deviation > 0:
+        noise = noise / deviation
+    return noise
+
+def build_texture_weight(rgb):
+    luminance = rgb @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    grad_y, grad_x = np.gradient(luminance)
+    magnitude = np.hypot(grad_x, grad_y)
+    texture = gaussian_blur(magnitude, TEXTURE_BLUR_SIGMA)
+    weight = np.clip(texture / TEXTURE_SCALE, 0.0, 1.0)
+    return MIN_WEIGHT + (1.0 - MIN_WEIGHT) * weight
+
 def apply_correlated_noise(image, strength):
     array = np.asarray(image).astype(np.float32)
-    has_alpha = array.shape[2] == 4
     rgb = array[:, :, :3]
-    noise_amplitude = strength * 255.0
-    noise = np.random.normal(loc=0.0, scale=noise_amplitude, size=rgb.shape[:2]).astype(np.float32)
-    rgb = rgb + noise[:, :, np.newaxis]
-    rgb = np.clip(rgb, 0, 255)
-    array[:, :, :3] = rgb
-    if has_alpha:
-        return Image.fromarray(array.astype(np.uint8), mode="RGBA")
-    return Image.fromarray(array.astype(np.uint8), mode="RGB")
+    noise = build_noise(rgb.shape[:2]) * build_texture_weight(rgb) * (strength * 255.0)
+    array[:, :, :3] = np.clip(rgb + noise[:, :, np.newaxis], 0, 255)
+    return Image.fromarray(np.rint(array).astype(np.uint8))
 
 def flatten_alpha(image):
     if image.mode != "RGBA":
