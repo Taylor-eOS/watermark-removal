@@ -2,8 +2,8 @@ import os
 import numpy as np
 from PIL import Image
 
-INPUT_DIR = "input_files"
-OUTPUT_DIR = "output_files"
+INPUT_DIR = os.path.expanduser("~/Desktop/b")
+OUTPUT_DIR = os.path.join(INPUT_DIR, "dithered")
 NOISE_STRENGTH = 0.006
 NOISE_FLOOR = 0.5
 TEXTURE_BLUR_SIGMA = 3.0
@@ -63,8 +63,9 @@ def gather_image_paths(directory):
     entries = sorted(os.listdir(directory))
     paths = []
     for name in entries:
-        if name.lower().endswith(VALID_EXTENSIONS):
-            paths.append(os.path.join(directory, name))
+        path = os.path.join(directory, name)
+        if os.path.isfile(path) and name.lower().endswith(VALID_EXTENSIONS):
+            paths.append(path)
     return paths
 
 def process_image(path, output_dir):
@@ -80,6 +81,7 @@ def process_image(path, output_dir):
         print(f"Failed: {path} ({error})")
 
 def main():
+    os.makedirs(INPUT_DIR, exist_ok=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     paths = gather_image_paths(INPUT_DIR)
     if not paths:
